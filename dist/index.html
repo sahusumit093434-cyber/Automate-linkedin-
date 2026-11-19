@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Private AI-assisted remote job matching, application preparation, approval, and tracking." />
+    <title>JobFlow AI</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">JF</div>
+          <div>
+            <strong>JobFlow AI</strong>
+            <span>Private application desk</span>
+          </div>
+        </div>
+
+        <nav aria-label="Primary navigation">
+          <button class="nav-item active" data-view="jobs"><span>01</span> Job workspace</button>
+          <button class="nav-item" data-view="tracker"><span>02</span> Application tracker</button>
+          <button class="nav-item" data-view="profile"><span>03</span> Candidate profile</button>
+        </nav>
+
+        <div class="sidebar-note">
+          <span class="eyebrow">Safety mode</span>
+          <p>Job materials are prepared here. LinkedIn and employer submissions remain manual.</p>
+        </div>
+
+        <div class="storage-status"><span></span> Saved in this browser</div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="viewEyebrow">Remote job pipeline</p>
+            <h1 id="viewTitle">Job workspace</h1>
+          </div>
+          <div class="top-actions">
+            <a class="button ghost" href="./Sumit_Sahu_AI_Resume.pdf" download>Download resume</a>
+            <button class="button primary" id="addJobButton">Add job</button>
+          </div>
+        </header>
+
+        <section class="view active" id="jobsView">
+          <div class="metric-grid" id="metricGrid"></div>
+
+          <div class="workspace-grid">
+            <section class="panel job-list-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Opportunity inbox</p>
+                  <h2>Remote roles</h2>
+                </div>
+                <div class="filter-row">
+                  <input id="jobSearch" type="search" placeholder="Search company or role" aria-label="Search jobs" />
+                  <select id="statusFilter" aria-label="Filter by status">
+                    <option value="all">All statuses</option>
+                    <option value="Needs review">Needs review</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Submitted">Submitted</option>
+                    <option value="Skipped">Skipped</option>
+                  </select>
+                </div>
+              </div>
+              <div id="jobList" class="job-list"></div>
+            </section>
+
+            <section class="panel detail-panel" id="jobDetail"></section>
+          </div>
+        </section>
+
+        <section class="view" id="trackerView">
+          <section class="panel tracker-panel">
+            <div class="panel-heading tracker-heading">
+              <div>
+                <p class="eyebrow">Application history</p>
+                <h2>Pipeline tracker</h2>
+              </div>
+              <div class="top-actions">
+                <button class="button ghost" id="exportButton">Export data</button>
+                <label class="button ghost file-button">Import data<input id="importInput" type="file" accept="application/json" /></label>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Company and role</th><th>Source</th><th>Score</th><th>Salary</th><th>Status</th><th>Updated</th></tr>
+                </thead>
+                <tbody id="trackerBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="profileView">
+          <div class="profile-grid">
+            <form class="panel profile-form" id="profileForm">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Verified candidate data</p>
+                  <h2>Candidate profile</h2>
+                </div>
+                <button class="button primary" type="submit">Save profile</button>
+              </div>
+              <div class="form-grid">
+                <label>Full name<input name="name" required /></label>
+                <label>Email<input name="email" type="email" required /></label>
+                <label>Phone<input name="phone" /></label>
+                <label>LinkedIn URL<input name="linkedin" type="url" /></label>
+                <label>Minimum salary in LPA<input name="minimumSalary" type="number" min="0" step="0.5" /></label>
+                <label>Expected salary in LPA<input name="expectedSalary" type="number" min="0" step="0.5" /></label>
+                <label class="wide">Target roles<textarea name="roles" rows="3"></textarea><small>Separate roles with commas.</small></label>
+                <label class="wide">Verified skills<textarea name="skills" rows="4"></textarea><small>Only include skills supported by your resume or repositories.</small></label>
+              </div>
+              <label class="check-row"><input name="remoteOnly" type="checkbox" /> Prioritize remote roles available to candidates in India</label>
+            </form>
+
+            <aside class="panel profile-summary">
+              <p class="eyebrow">Application policy</p>
+              <h2>Built for quality, not volume</h2>
+              <ul>
+                <li>Salary below your minimum is automatically flagged.</li>
+                <li>Unsupported skills are never added to application drafts.</li>
+                <li>LinkedIn links are opened manually in your browser.</li>
+                <li>Every final Submit or Send action stays with you.</li>
+              </ul>
+              <div class="policy-line"><span>LinkedIn automation</span><strong>Disabled</strong></div>
+              <div class="policy-line"><span>Final approval</span><strong>Required</strong></div>
+              <div class="policy-line"><span>Data storage</span><strong>Browser only</strong></div>
+            </aside>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="jobDialog">
+      <form method="dialog" id="jobForm">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">New opportunity</p><h2>Add a job for analysis</h2></div>
+          <button class="icon-button" value="cancel" aria-label="Close">×</button>
+        </div>
+        <div class="form-grid">
+          <label>Company<input name="company" required /></label>
+          <label>Role<input name="role" required /></label>
+          <label>Source<select name="source"><option>LinkedIn</option><option>Company careers</option><option>Public job board</option><option>Recruiter</option></select></label>
+          <label>Work mode<select name="workMode"><option>Remote</option><option>Hybrid</option><option>Onsite</option></select></label>
+          <label>Minimum salary in LPA<input name="salaryMin" type="number" min="0" step="0.5" /></label>
+          <label>Maximum salary in LPA<input name="salaryMax" type="number" min="0" step="0.5" /></label>
+          <label>Posting date<input name="postedAt" type="date" /></label>
+          <label>Job URL<input name="url" type="url" required placeholder="https://..." /></label>
+          <label class="wide">Job description<textarea name="description" rows="9" required placeholder="Paste the complete job description here"></textarea></label>
+        </div>
+        <div class="dialog-actions">
+          <button class="button ghost" value="cancel">Cancel</button>
+          <button class="button primary" value="default" id="analyzeButton">Analyze job</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="./app.js"></script>
+  </body>
+</html>
