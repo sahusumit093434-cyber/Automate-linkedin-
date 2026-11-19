@@ -104,6 +104,24 @@ test("skill matching uses complete terms rather than substrings", () => {
   assert.equal(result.matchedSkills.includes("Python"), true);
 });
 
+test("discovery accepts India-compatible remote locations only", () => {
+  const context = createAppContext();
+  context.__location = "Worldwide";
+  assert.equal(vm.runInContext("isIndiaEligible(__location)", context), true);
+  context.__location = "India / APAC";
+  assert.equal(vm.runInContext("isIndiaEligible(__location)", context), true);
+  context.__location = "USA only";
+  assert.equal(vm.runInContext("isIndiaEligible(__location)", context), false);
+});
+
+test("salary parser only converts explicit INR and LPA values", () => {
+  const context = createAppContext();
+  context.__salary = "₹800000 - ₹1200000 per year";
+  assert.deepEqual({ ...vm.runInContext("parseSalaryLpa(__salary)", context) }, { min: 8, max: 12 });
+  context.__salary = "$80,000 - $120,000";
+  assert.deepEqual({ ...vm.runInContext("parseSalaryLpa(__salary)", context) }, { min: 0, max: 0 });
+});
+
 test("imports reject executable URLs and normalize statuses", () => {
   const context = createAppContext();
   const base = {

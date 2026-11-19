@@ -40,11 +40,13 @@
           </div>
           <div class="top-actions">
             <a class="button ghost" href="./Sumit_Sahu_AI_Resume.pdf" download>Download resume</a>
+            <button class="button ghost" id="discoverButton">Discover remote jobs</button>
             <button class="button primary" id="addJobButton">Add job</button>
           </div>
         </header>
 
         <section class="view active" id="jobsView">
+          <div class="discovery-banner" id="discoveryBanner" role="status" aria-live="polite"></div>
           <div class="metric-grid" id="metricGrid"></div>
 
           <div class="workspace-grid">
@@ -115,7 +117,8 @@
                 <label class="wide">Target roles<textarea name="roles" rows="3"></textarea><small>Separate roles with commas.</small></label>
                 <label class="wide">Verified skills<textarea name="skills" rows="4"></textarea><small>Only include skills supported by your resume or repositories.</small></label>
               </div>
-              <label class="check-row"><input name="remoteOnly" type="checkbox" /> Prioritize remote roles available to candidates in India</label>
+              <label class="check-row"><input name="remoteOnly" type="checkbox" /> Only qualify remote roles available to candidates in India</label>
+              <label class="check-row"><input name="autoDiscover" type="checkbox" /> Automatically check the permitted remote-job feed every six hours</label>
             </form>
 
             <aside class="panel profile-summary">
@@ -145,7 +148,7 @@
         <div class="form-grid">
           <label>Company<input name="company" required /></label>
           <label>Role<input name="role" required /></label>
-          <label>Source<select name="source"><option>LinkedIn</option><option>Company careers</option><option>Public job board</option><option>Recruiter</option></select></label>
+          <label>Source<select name="source"><option>LinkedIn</option><option>Remotive</option><option>Company careers</option><option>Public job board</option><option>Recruiter</option></select></label>
           <label>Work mode<select name="workMode"><option>Remote</option><option>Hybrid</option><option>Onsite</option></select></label>
           <label>Minimum salary in LPA<input name="salaryMin" type="number" min="0" step="0.5" /></label>
           <label>Maximum salary in LPA<input name="salaryMax" type="number" min="0" step="0.5" /></label>

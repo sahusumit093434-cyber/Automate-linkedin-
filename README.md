@@ -1,10 +1,19 @@
 # JobFlow AI
 
-JobFlow AI is a private, browser-based job qualification and application-preparation workspace. It scores pasted vacancies against a verified candidate profile, prepares truthful draft materials, and tracks applications.
+JobFlow AI is a private, browser-based job discovery, qualification, and application-preparation workspace. It checks a permitted remote-job feed, scores vacancies against a verified candidate profile, prepares truthful draft materials, and tracks applications.
 
 ## Safety boundary
 
-The app does not log in to LinkedIn, scrape LinkedIn, message recruiters, upload documents, or press a final Submit button. Those actions remain manual. Job discovery should use authorized APIs, employer career feeds, email alerts, or job-board exports if a backend is added later.
+The app does not log in to LinkedIn, scrape LinkedIn, message recruiters, upload documents, or press a final Submit button. Those actions remain manual. LinkedIn prohibits unauthorized bots and browser automation, and its job APIs require approved partner access.
+
+## Automated discovery
+
+- Uses Remotive's public API with the required source attribution and link back.
+- Runs at most once every six hours, matching the provider's recommended maximum of four requests per day.
+- Adds only target-role listings that explicitly allow candidates in India, Asia/APAC, or worldwide.
+- Rejects duplicate URLs and experienced/senior vacancies.
+- Leaves unknown or non-INR compensation in review instead of guessing an exchange rate.
+- Never republishes or submits a Remotive listing to another job board.
 
 ## Current qualification rules
 
@@ -14,6 +23,7 @@ The app does not log in to LinkedIn, scrape LinkedIn, message recruiters, upload
 - Experienced and senior roles are blocked for the fresher profile.
 - Target-role and verified-skill evidence contribute to the match score.
 - Duplicate URL or company/role combinations are rejected.
+- Blocked vacancies cannot be approved until their qualification issue is resolved.
 
 ## Local use
 

@@ -1,4 +1,7 @@
 const STORAGE_KEY = "jobflow-ai-v1";
+const DISCOVERY_KEY = "jobflow-ai-discovery-v1";
+const DISCOVERY_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const REMOTIVE_ENDPOINT = "https://remotive.com/api/remote-jobs?limit=100";
 
 const defaultProfile = {
   name: "",
@@ -8,6 +11,7 @@ const defaultProfile = {
   minimumSalary: 6,
   expectedSalary: 10,
   remoteOnly: true,
+  autoDiscover: true,
   roles: ["Software Developer", "Software Development Engineer (SDE)", "AI/ML Engineer", "Full-Stack Developer", "AI Product Engineer"],
   skills: ["Python", "JavaScript", "TypeScript", "React", "Node.js", "Express", "FastAPI", "MongoDB", "RAG", "LLM", "LanceDB", "BM25", "REST APIs", "PySpark", "Pandas", "NumPy", "SciPy", "Git", "pytest", "Vitest", "Playwright"]
 };
@@ -17,7 +21,7 @@ let selectedJobId = state.jobs[0]?.id || null;
 let currentDraftTab = "summary";
 let editingJobId = null;
 
-const ALLOWED_SOURCES = ["LinkedIn", "Company careers", "Public job board", "Recruiter"];
+const ALLOWED_SOURCES = ["LinkedIn", "Remotive", "Company careers", "Public job board", "Recruiter"];
 const ALLOWED_WORK_MODES = ["Remote", "Hybrid", "Onsite"];
 const ALLOWED_STATUSES = ["Needs review", "Approved", "Submitted", "Skipped"];
 
@@ -132,7 +136,7 @@ function analyzeJob(raw) {
   if (blockers.length) score = Math.min(score, 59);
 
   const recommendation = blockers.length ? "Skip" : reviewFlags.length || score < 75 ? "Review" : "Apply";
-  return { score, matchedSkills, missingSignals, blockers, reviewFlags, recommendation, salaryKnown };
+  return { score, matchedSkills, missingSignals, blockers, reviewFlags, recommendation, salaryKnown, roleMatched: exactRoleMatch || tokenHits.length > 0 };
 }
 
 function validateImportedState(imported) {
@@ -145,6 +149,7 @@ function validateImportedState(imported) {
     minimumSalary: numberInRange(imported.profile.minimumSalary, 0, 100),
     expectedSalary: numberInRange(imported.profile.expectedSalary, 0, 100),
     remoteOnly: imported.profile.remoteOnly !== false,
+    autoDiscover: imported.profile.autoDiscover !== false,
     roles: Array.isArray(imported.profile.roles) ? imported.profile.roles.map((item) => cleanText(item, 100)).filter(Boolean).slice(0, 30) : [],
     skills: Array.isArray(imported.profile.skills) ? imported.profile.skills.map((item) => cleanText(item, 100)).filter(Boolean).slice(0, 100) : []
   };
@@ -179,6 +184,111 @@ function validateImportedState(imported) {
     return { profile, jobs };
   } finally {
     state.profile = previousProfile;
+  }
+}
+
+function stripJobHtml(value = "") {
+  if (typeof DOMParser === "undefined") return cleanText(value.replace(/<[^>]*>/g, " "), 30000);
+  const parsed = new DOMParser().parseFromString(String(value), "text/html");
+  return cleanText(parsed.body.textContent || "", 30000);
+}
+
+function parseSalaryLpa(value = "") {
+  const salary = String(value).toLowerCase().replace(/,/g, "");
+  const numbers = [...salary.matchAll(/\d+(?:\.\d+)?/g)].map((match) => Number(match[0])).filter(Number.isFinite);
+  if (!numbers.length) return { min: 0, max: 0 };
+  if (/\b(?:lpa|lakhs?|lacs?)\b/.test(salary)) return { min: numbers[0], max: numbers[1] || numbers[0] };
+  if (/[₹]|\b(?:inr|rs\.?)\b/.test(salary)) {
+    const annual = numbers.map((number) => number >= 1000 ? number / 100000 : number);
+    return { min: Number(annual[0].toFixed(2)), max: Number((annual[1] || annual[0]).toFixed(2)) };
+  }
+  return { min: 0, max: 0 };
+}
+
+function isIndiaEligible(location = "") {
+  const normalized = normalize(location);
+  if (!normalized) return false;
+  return ["worldwide", "anywhere", "global", "india", "asia", "apac"].some((term) => hasNormalizedTerm(normalized, term));
+}
+
+function getDiscoveryMeta() {
+  try {
+    const meta = JSON.parse(localStorage.getItem(DISCOVERY_KEY));
+    return meta && typeof meta === "object" ? meta : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function renderDiscoveryBanner(message = "", isError = false) {
+  const banner = $("#discoveryBanner");
+  if (!banner) return;
+  const meta = getDiscoveryMeta();
+  const lastRun = meta.lastRun ? new Date(meta.lastRun).toLocaleString() : "Not run yet";
+  banner.classList.toggle("error", isError);
+  banner.innerHTML = `<span>${escapeHtml(message || `Automatic discovery: ${lastRun}. Jobs with unverified salary stay in review.`)}</span><a href="https://remotive.com" target="_blank" rel="noopener">Jobs by Remotive</a>`;
+}
+
+async function discoverRemoteJobs({ manual = false } = {}) {
+  const button = $("#discoverButton");
+  const meta = getDiscoveryMeta();
+  const elapsed = meta.lastRun ? Date.now() - new Date(meta.lastRun).getTime() : Infinity;
+  if (elapsed < DISCOVERY_INTERVAL_MS) {
+    const nextRun = new Date(new Date(meta.lastRun).getTime() + DISCOVERY_INTERVAL_MS).toLocaleString();
+    renderDiscoveryBanner(`Feed already checked. Next permitted refresh: ${nextRun}.`);
+    return;
+  }
+  if (typeof fetch !== "function") {
+    renderDiscoveryBanner("Live discovery is unavailable in this browser.", true);
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "Searching…";
+  renderDiscoveryBanner("Searching the permitted remote-job feed…");
+  try {
+    const response = await fetch(REMOTIVE_ENDPOINT, { credentials: "omit", referrerPolicy: "no-referrer" });
+    if (!response.ok) throw new Error(`Job feed returned ${response.status}`);
+    const payload = await response.json();
+    if (!Array.isArray(payload.jobs)) throw new Error("Job feed response was invalid");
+    const knownUrls = new Set(state.jobs.map((job) => safeHttpUrl(job.url)));
+    const discovered = [];
+    for (const raw of payload.jobs) {
+      const url = safeHttpUrl(raw.url);
+      if (!url || knownUrls.has(url) || !isIndiaEligible(raw.candidate_required_location)) continue;
+      const salary = parseSalaryLpa(raw.salary);
+      const job = {
+        id: `remotive-${String(raw.id).replace(/[^a-zA-Z0-9-]/g, "")}`,
+        company: cleanText(raw.company_name, 150),
+        role: cleanText(raw.title, 150),
+        source: "Remotive",
+        workMode: "Remote",
+        salaryMin: salary.min,
+        salaryMax: salary.max,
+        postedAt: /^\d{4}-\d{2}-\d{2}/.test(raw.publication_date || "") ? raw.publication_date.slice(0, 10) : "",
+        url,
+        description: stripJobHtml(raw.description),
+        status: "Needs review",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      if (!job.company || !job.role || !job.description) continue;
+      job.analysis = analyzeJob(job);
+      if (!job.analysis.roleMatched || job.analysis.blockers.some((blocker) => /experience beyond fresher/i.test(blocker))) continue;
+      discovered.push(job);
+      knownUrls.add(url);
+      if (discovered.length >= 30) break;
+    }
+    state.jobs = [...discovered, ...state.jobs];
+    if (discovered.length) selectedJobId = discovered[0].id;
+    localStorage.setItem(DISCOVERY_KEY, JSON.stringify({ lastRun: new Date().toISOString(), added: discovered.length }));
+    saveState(`Discovery added ${discovered.length} new matching job${discovered.length === 1 ? "" : "s"}`);
+    renderDiscoveryBanner(`Discovery complete: ${discovered.length} new India-eligible target role${discovered.length === 1 ? "" : "s"} added for review.`);
+  } catch (error) {
+    renderDiscoveryBanner(`Discovery failed: ${error.message || "Could not reach the job feed"}`, true);
+    if (manual) showToast("Could not refresh the remote-job feed");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Discover remote jobs";
   }
 }
 
@@ -257,7 +367,8 @@ function renderDetail() {
   $("#jobDetail").innerHTML = `
     <div class="detail-title-row"><div><p class="eyebrow">${escapeHtml(job.analysis.recommendation)} recommendation</p><h2>${escapeHtml(job.role)}</h2><p>${escapeHtml(job.company)} · ${escapeHtml(job.workMode)}</p></div><span class="score">${job.analysis.score}</span></div>
     <div class="detail-actions">
-      ${job.status !== "Approved" && job.status !== "Submitted" ? `<button class="button primary" data-action="approve">Approve package</button>` : ""}
+      ${job.status !== "Approved" && job.status !== "Submitted" && job.analysis.recommendation !== "Skip" ? `<button class="button primary" data-action="approve">Approve package</button>` : ""}
+      ${job.status === "Approved" ? `<button class="button primary" data-action="start">Start assisted application</button>` : ""}
       ${approved && job.status !== "Submitted" ? `<button class="button primary" data-action="submitted">Mark submitted</button>` : ""}
       <a class="button ghost" href="${escapeHtml(safeHttpUrl(job.url))}" target="_blank" rel="noopener">Open job posting</a>
       <button class="button ghost" data-action="edit">Edit</button>
@@ -284,7 +395,13 @@ function renderDetail() {
 function handleJobAction(id, action, draft) {
   const job = state.jobs.find((item) => item.id === id);
   if (!job) return;
-  if (action === "approve") job.status = "Approved";
+  if (action === "approve") {
+    if (job.analysis.recommendation === "Skip") {
+      showToast("Resolve the blocking requirements before approval");
+      return;
+    }
+    job.status = "Approved";
+  }
   if (action === "submitted") job.status = "Submitted";
   if (action === "skip") job.status = "Skipped";
   if (action === "restore") job.status = "Needs review";
@@ -297,6 +414,13 @@ function handleJobAction(id, action, draft) {
     state.jobs = state.jobs.filter((item) => item.id !== id);
     selectedJobId = state.jobs[0]?.id || null;
     saveState("Job deleted");
+    return;
+  }
+  if (action === "start") {
+    const coverLetter = buildDrafts(job).cover;
+    navigator.clipboard.writeText(coverLetter).catch(() => {});
+    window.open(safeHttpUrl(job.url), "_blank", "noopener");
+    showToast("Cover letter copied. Review the employer form before submitting.");
     return;
   }
   if (action === "copy") {
@@ -322,7 +446,7 @@ function renderProfile() {
   Object.entries(state.profile).forEach(([key, value]) => {
     if (!form.elements[key]) return;
     if (key === "roles" || key === "skills") form.elements[key].value = value.join(", ");
-    else if (key === "remoteOnly") form.elements[key].checked = value;
+    else if (typeof value === "boolean") form.elements[key].checked = value;
     else form.elements[key].value = value;
   });
 }
@@ -369,9 +493,11 @@ function switchView(view) {
   $("#viewEyebrow").textContent = headings[view][0];
   $("#viewTitle").textContent = headings[view][1];
   $("#addJobButton").style.display = view === "jobs" ? "inline-flex" : "none";
+  $("#discoverButton").style.display = view === "jobs" ? "inline-flex" : "none";
 }
 
 $("#addJobButton").addEventListener("click", openJobDialog);
+$("#discoverButton").addEventListener("click", () => discoverRemoteJobs({ manual: true }));
 $("#closeJobDialog").addEventListener("click", () => { editingJobId = null; $("#jobDialog").close(); });
 $("#cancelJobDialog").addEventListener("click", () => { editingJobId = null; $("#jobDialog").close(); });
 $$(".nav-item").forEach((item) => item.addEventListener("click", () => switchView(item.dataset.view)));
@@ -430,6 +556,7 @@ $("#profileForm").addEventListener("submit", (event) => {
     expectedSalary: Number(values.expectedSalary) || 0,
     linkedin,
     remoteOnly: event.currentTarget.elements.remoteOnly.checked,
+    autoDiscover: event.currentTarget.elements.autoDiscover.checked,
     roles: values.roles.split(",").map((item) => item.trim()).filter(Boolean),
     skills: values.skills.split(",").map((item) => item.trim()).filter(Boolean)
   };
@@ -469,3 +596,5 @@ try {
 }
 selectedJobId = state.jobs[0]?.id || null;
 renderAll();
+renderDiscoveryBanner();
+if (state.profile.autoDiscover) discoverRemoteJobs();
