@@ -139,8 +139,8 @@
     <dialog id="jobDialog">
       <form method="dialog" id="jobForm">
         <div class="dialog-heading">
-          <div><p class="eyebrow">New opportunity</p><h2>Add a job for analysis</h2></div>
-          <button class="icon-button" value="cancel" aria-label="Close">×</button>
+          <div><p class="eyebrow">New opportunity</p><h2 id="jobDialogTitle">Add a job for analysis</h2></div>
+          <button class="icon-button" id="closeJobDialog" type="button" aria-label="Close">×</button>
         </div>
         <div class="form-grid">
           <label>Company<input name="company" required /></label>
@@ -154,8 +154,8 @@
           <label class="wide">Job description<textarea name="description" rows="9" required placeholder="Paste the complete job description here"></textarea></label>
         </div>
         <div class="dialog-actions">
-          <button class="button ghost" value="cancel">Cancel</button>
-          <button class="button primary" value="default" id="analyzeButton">Analyze job</button>
+          <button class="button ghost" id="cancelJobDialog" type="button">Cancel</button>
+          <button class="button primary" type="submit" id="analyzeButton">Analyze job</button>
         </div>
       </form>
     </dialog>
